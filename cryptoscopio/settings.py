@@ -16,16 +16,11 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/2.1/howto/deployment/checklist/
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'y88#3qd#exf=f#yau)yavhv(k5mg*pu3#*19cuebe7n-fqurv$'
+DEBUG = bool(os.environ.get('DJANGO_DEBUG'))
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS').split(';')
 
 
 # Application definition
@@ -75,8 +70,11 @@ WSGI_APPLICATION = 'cryptoscopio.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': os.environ.get('DJANGO_DATABASE_ENGINE'),
+        'NAME': os.environ.get('DJANGO_DATABASE_NAME'),
+        'HOST': os.environ.get('DJANGO_DATABASE_HOST'),
+        'USER': os.environ.get('DJANGO_DATABASE_USER'),
+        'PASSWORD': os.environ.get('DJANGO_DATABASE_PASSWORD')
     }
 }
 
