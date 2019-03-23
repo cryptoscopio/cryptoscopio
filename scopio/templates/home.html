@@ -1,0 +1,25 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset='utf-8'>
+		<title>Cryptoscopio</title>
+		<link rel='stylesheet' href='{% static "style.css" %}'>
+		<script src='{% static "base.js" %}' async></script>
+	</head>
+	<body>
+		<header>
+			<select id='upload-select' disabled>
+				<option value='' class='default-option'>Upload records...</option>
+				<option value='coinbase' class='coinbase'>Coinbase</option>
+			</select>
+			<h1>Cryptoscopio</h1>
+			<form action='.' method='POST'>
+				<input type='file' id='upload-input' name='upload-input' accept='.csv' multiple>
+			</form>
+		</header>
+		<main>
+			
+		</main>
+	</body>
+</html>
