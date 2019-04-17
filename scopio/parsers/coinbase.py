@@ -2,7 +2,8 @@ import csv
 from datetime import datetime
 from decimal import Decimal
 
-from ..models import Record
+from .. import explorers
+from ..models import Event, Record
 from ..utils import wrap_uploaded_file
 
 
@@ -29,27 +30,48 @@ def parse(data):
 		order_price, order_currency, order_btc, order_tracking, order_custom, order_paid, recurring, \
 		coinbase_id, blockchain_hash \
 	in reader:
-		id_ = 'CBASE%s' % coinbase_id
+		id_ = f'coinbase {coinbase_id}'
 		# Check if we've already parsed this transaction
 		if Record.objects.filter(pk=id_).exists():
 			transactions_skipped += 1
 			continue
 		timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S %z')
 		amount = Decimal(amount)
-		# TODO: check if transfer currency matches the user's currency and convert if not
+		# Cryptocurrency purchase
 		if transfer_amount and amount > 0 and transfer_currency == 'AUD':
-			# Cryptocurrency purchase
+			# The fee is not included in the price calculation
+			price = (Decimal(transfer_amount) - Decimal(transfer_fee or 0)) / amount
+			# TODO: convert price to the user's currency, if needed
 			record = Record.objects.create(
 				pk=id_,
 				timestamp=timestamp,
 				amount=amount,
 				currency=currency,
-				price=Decimal(transfer_amount) / amount,
+				price=price,
 				fiat=transfer_currency,
 			)
+			# Create acquisition tax event
+			event = Event.objects.create(
+				type=Event.ACQUISITION,
+				timestamp=timestamp,
+				currency=currency,
+				amount=amount,
+				price=price,
+			)
+			record.events.add(event)
+			# Create a non-tax event for the fee that was paid
+			if transfer_fee and Decimal(transfer_fee) > 0:
+				event = Event.objects.create(
+					type=Event.FIAT_FEE,
+					timestamp=timestamp,
+					currency=transfer_currency,
+					amount=Decimal(transfer_fee),
+					price=None,
+				)
+				record.events.add(event)
 			transactions_parsed += 1
+		# Incoming cryptocurrency transfer
 		elif not transfer_amount and amount > 0:
-			# Incoming cryptocurrency transfer
 			record = Record.objects.create(
 				pk=id_,
 				timestamp=timestamp,
@@ -58,8 +80,8 @@ def parse(data):
 				tx_hash=blockchain_hash,
 			)
 			transactions_parsed += 1
+		# Outgoing cryptocurrency transfer
 		elif not transfer_amount and amount < 0:
-			# Outgoing cryptocurrency transfer
 			record = Record.objects.create(
 				pk=id_,
 				timestamp=timestamp,
@@ -67,9 +89,26 @@ def parse(data):
 				currency=currency,
 				tx_hash=blockchain_hash,
 			)
+			# The transfer fee is not specified, so we get it from the blockchain.
+			# There is a small risk here for currencies such as Bitcoin, where
+			# transaction has multiple inputs/outputs, of someone else making
+			# a transfer to the same address within the same transaction.
+			# TODO: use matching explorer for currency
+			received = -explorers.bitcoin.get_outgoing_amount(blockchain_hash, to_)
+			# Keep in mind amount and received should be negative
+			if received and received > amount:
+				event = Event.objects.create(
+					type=Event.DISPOSAL_FEE,
+					timestamp=timestamp,
+					currency=currency,
+					amount=amount - received,
+					# TODO: convert USD to local currency
+					price=explorers.bitcoin.get_usd_price(timestamp),
+				)
+				record.events.add(event)
 			transactions_parsed += 1
+		# Not a recognised type of transaction
 		else:
-			# Not a recognised type of transaction
 			transactions_failed += 1
 			# TODO: log and notify
 	return transactions_parsed, transactions_skipped, transactions_failed
