@@ -1,0 +1,35 @@
+[
+{
+  "model": "currencio.currency",
+  "pk": "bitcoin",
+  "fields": {
+    "ticker": "BTC",
+    "name": "Bitcoin",
+    "fiat": false,
+    "prefix": "",
+    "precision": 8
+  }
+},
+{
+  "model": "currencio.currency",
+  "pk": "fiat-aud",
+  "fields": {
+    "ticker": "AUD",
+    "name": "Australian Dollar",
+    "fiat": true,
+    "prefix": "A$",
+    "precision": 2
+  }
+},
+{
+  "model": "currencio.currency",
+  "pk": "fiat-usd",
+  "fields": {
+    "ticker": "USD",
+    "name": "US Dollar",
+    "fiat": true,
+    "prefix": "$",
+    "precision": 2
+  }
+}
+]
