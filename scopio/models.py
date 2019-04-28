@@ -5,11 +5,21 @@ class Record(models.Model):
 	id = models.CharField(max_length=1024, primary_key=True)
 	timestamp = models.DateTimeField()
 	amount = models.DecimalField(max_digits=160, decimal_places=32)
-	currency = models.CharField(max_length=24) # TODO: make into FK
+	currency = models.ForeignKey('currencio.Currency', on_delete=models.CASCADE)
 	tx_hash = models.CharField(max_length=1024, blank=True)
-	price = models.DecimalField(blank=True, null=True, max_digits=160, decimal_places=32)
-	fiat = models.CharField(max_length=24, blank=True) # TODO: make into FK
-	match = models.OneToOneField('Record', on_delete=models.SET_NULL, null=True, blank=True)
+	price = models.DecimalField(
+		max_digits=160, decimal_places=32,
+		null=True, blank=True,
+	)
+	fiat = models.ForeignKey('currencio.Currency',
+		on_delete=models.CASCADE,
+		related_name='fiat_record',
+		null=True, blank=True,
+	)
+	match = models.OneToOneField('Record',
+		on_delete=models.SET_NULL,
+		null=True, blank=True,
+	)
 	events = models.ManyToManyField('Event')
 
 	class Meta:
@@ -18,9 +28,9 @@ class Record(models.Model):
 	def __str__(self):
 		if self.price:
 			action = 'Purchased' if self.amount >= 0 else 'Sold'
-			return f'{action} {self.currency} {str(self.amount).rstrip("0")} for {self.fiat} {self.amount * self.price:.2f}'
+			return f'{action} {self.currency.format_amount(self.amount)} for {self.fiat.format_amount(self.amount * self.price)}'
 		action = 'Incoming' if self.amount >= 0 else 'Outgoing'
-		return f'{action} transfer of {self.currency} {str(self.amount).rstrip("0")}'
+		return f'{action} transfer of {self.currency.format_amount(self.amount)}'
 
 	def platform(self):
 		return self.id.split()[0]
@@ -41,7 +51,7 @@ class Event(models.Model):
 
 	type = models.IntegerField(choices=TYPE_CHOICES)
 	timestamp = models.DateTimeField()
-	currency = models.CharField(max_length=24) # TODO: make into FK
+	currency = models.ForeignKey('currencio.Currency', on_delete=models.CASCADE)
 	amount = models.DecimalField(max_digits=160, decimal_places=32)
 	price = models.DecimalField(max_digits=160, decimal_places=32, null=True)
 
@@ -49,7 +59,13 @@ class Event(models.Model):
 		ordering = ['timestamp']
 
 	def __str__(self):
-		return f'{self.get_type_display()}: {self.currency} {self.amount}'
+		# TODO: replace this with a sane method of getting the price currency
+		from currencio.models import Currency
+		user_currency = Currency.objects.get(ticker='AUD', fiat=True)
+		return ''.join((
+			f'{self.get_type_display()}: {self.currency.format_amount(self.amount)}',
+			f' at {user_currency.format_amount(self.price)}' if self.price is not None else '',
+		))
 
 	def get_style_class(self):
 		if self.type in [Event.DISPOSAL, Event.DISPOSAL_FEE]:

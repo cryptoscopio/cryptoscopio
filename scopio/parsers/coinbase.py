@@ -2,6 +2,9 @@ import csv
 from datetime import datetime
 from decimal import Decimal
 
+from currencio.models import Currency
+from currencio.utils import convert
+
 from .. import explorers
 from ..models import Event, Record
 from ..utils import wrap_uploaded_file
@@ -18,6 +21,9 @@ def parse(data):
 		[22 column headers]
 		[transactions]
 	"""
+	currency = None
+	# TODO: allow this to be set by user
+	user_currency = Currency.objects.get(ticker='AUD', fiat=True)
 	transactions_parsed = 0
 	transactions_skipped = 0
 	transactions_failed = 0
@@ -25,7 +31,7 @@ def parse(data):
 	# Skip the first 5 lines that are of no use to us
 	[next(reader) for i in range(5)]
 	# Parse the data rows
-	for timestamp, balance, amount, currency, to_, notes, instant, \
+	for timestamp, balance, amount, cryptocurrency, to_, notes, instant, \
 		transfer_amount, transfer_currency, transfer_fee, transfer_fee_currency, method, transfer_id, \
 		order_price, order_currency, order_btc, order_tracking, order_custom, order_paid, recurring, \
 		coinbase_id, blockchain_hash \
@@ -37,18 +43,21 @@ def parse(data):
 			continue
 		timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S %z')
 		amount = Decimal(amount)
+		# Currency should stay the same, so avoid re-fetching, but sanity check
+		if not currency or currency.ticker != cryptocurrency:
+			currency = Currency.objects.get(ticker=cryptocurrency, fiat=False)
 		# Cryptocurrency purchase
-		if transfer_amount and amount > 0 and transfer_currency == 'AUD':
+		if transfer_amount and amount > 0 and transfer_currency:
+			fiat = Currency.objects.get(ticker=transfer_currency, fiat=True)
 			# The fee is not included in the price calculation
 			price = (Decimal(transfer_amount) - Decimal(transfer_fee or 0)) / amount
-			# TODO: convert price to the user's currency, if needed
 			record = Record.objects.create(
 				pk=id_,
 				timestamp=timestamp,
 				amount=amount,
 				currency=currency,
 				price=price,
-				fiat=transfer_currency,
+				fiat=fiat,
 			)
 			# Create acquisition tax event
 			event = Event.objects.create(
@@ -56,7 +65,7 @@ def parse(data):
 				timestamp=timestamp,
 				currency=currency,
 				amount=amount,
-				price=price,
+				price=convert(fiat, user_currency, price, timestamp),
 			)
 			record.events.add(event)
 			# Create a non-tax event for the fee that was paid
@@ -64,8 +73,8 @@ def parse(data):
 				event = Event.objects.create(
 					type=Event.FIAT_FEE,
 					timestamp=timestamp,
-					currency=transfer_currency,
-					amount=Decimal(transfer_fee),
+					currency=fiat,
+					amount=convert(fiat, user_currency, Decimal(transfer_fee), timestamp),
 					price=None,
 				)
 				record.events.add(event)
@@ -102,8 +111,13 @@ def parse(data):
 					timestamp=timestamp,
 					currency=currency,
 					amount=amount - received,
-					# TODO: convert USD to local currency
-					price=explorers.bitcoin.get_usd_price(timestamp),
+					# TODO: let convert do the BTC -> USD conversion as well
+					price=convert(
+						Currency.objects.get(ticker='USD', fiat=True),
+						user_currency,
+						explorers.bitcoin.get_usd_price(timestamp),
+						timestamp,
+					)
 				)
 				record.events.add(event)
 			transactions_parsed += 1

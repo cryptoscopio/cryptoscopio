@@ -24,6 +24,7 @@
 					<thead>
 						<tr>
 							<th>Platform</th>
+							<th>Date</th>
 							<th>Action</th>
 							<th>Tax events</th>
 						</tr>
@@ -32,11 +33,12 @@
 						{% for record in records %}
 							<tr>
 								<td>{{ record.platform }}</td>
+								<td>{{ record.timestamp }}</td>
 								<td>{{ record }}</td>
 								<td>
 									{% for event in record.events.all %}
 										<div class='{{ event.get_style_class }}'>
-											{{ event.get_type_display }}: {{ event.currency }} {{ event.get_amount_display }} at ${{ event.price|floatformat:"2" }}
+											{{ event }}
 										</div>
 									{% endfor %}
 								</td>
