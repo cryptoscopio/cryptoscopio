@@ -15,6 +15,8 @@ class Command(BaseCommand):
 		parser.add_argument('source', help='Source currency (e.g. AUD)')
 		parser.add_argument('target', help='Target currency (e.g. USD)')
 		parser.add_argument('hst_file', help='Path to HST file')
+		parser.add_argument('--from-date', help='Date to parse data from (e.g. 2009-01-14)')
+		parser.add_argument('--to-date', help='Date to parse data from (e.g. 2018-06-31)')
 
 	def handle(self, *args, **options):
 		try:
@@ -25,6 +27,19 @@ class Command(BaseCommand):
 			target = Currency.objects.get(ticker=options['target'].upper(), fiat=True)
 		except Currency.DoesNotExist:
 			raise CommandError(f'Currency "{options["target"]}" has no database record')
+
+		from_date = None
+		if 'from_date' in options:
+			try:
+				from_date = datetime.strptime(options['from_date'], '%Y-%m-%d')
+			except ValueError:
+				raise CommandError(f'Could not parse from date "{options["from_date"]}" into date')
+		to_date = None
+		if 'to_date' in options:
+			try:
+				to_date = datetime.strptime(options['to_date'], '%Y-%m-%d')
+			except ValueError:
+				raise CommandError(f'Could not parse from date "{options["to_date"]}" into date')
 		with open(options['hst_file'], 'rb') as f:
 			# Skip header
 			f.read(148)
@@ -42,9 +57,12 @@ class Command(BaseCommand):
 				if not buffer:
 					break
 				timestamp, open_, high, low, close, volume = struct.unpack("<iddddd", buffer)
-				# Discard pre-2009 records, before cryptocurrency existed
-				if timestamp < datetime(2019, 1, 1).timestamp():
+				# Discard records outside of specified range
+				if from_date and timestamp < from_date.timestamp():
 					continue
+				if to_date and timestamp > to_date.timestamp():
+					continue
+				# Create records without overwriting existing ones
 				record, created = MovementData.objects.get_or_create(
 					pair=pair,
 					timestamp=datetime.fromtimestamp(timestamp, tz=timezone.utc),
