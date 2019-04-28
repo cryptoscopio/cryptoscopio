@@ -169,12 +169,14 @@ class Pair(models.Model):
 			.aggregate(models.Max('timestamp'))['timestamp__max']
 		self.save()
 
-	def convert(self, amount, timestamp):
+	def price_at(self, timestamp):
 		"""
-		Return amount of target currency corresponding to provided `amount` of
-		source currency at provided timestamp.
+		Return the price of the target currency in the source currency at
+		provided `timestamp`.
 
 		TODO: make this use smoothing or other outlier detection
+		TODO: handle missing candles
+		TODO: accept argument as to which way to err
 		"""
 		record = self.records.filter(timestamp__lte=timestamp).order_by('timestamp')[0]
 		return (record.high + record.low) / decimal.Decimal(2)

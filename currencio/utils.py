@@ -61,6 +61,9 @@ class PathNotFound(Exception):
 
 
 def convert(source, target, amount, timestamp):
+	# Check for no-op
+	if source == target:
+		return amount
 	# Find paths from source to target currency via trading pairs with
 	# available movement data
 	paths = list(_find_paths(source, target, timestamp))
@@ -78,10 +81,10 @@ def convert(source, target, amount, timestamp):
 	# the target currency
 	for pair in path:
 		if source == pair.source:
-			amount = pair.convert(amount, timestamp)
+			amount = amount * pair.price_at(timestamp)
 			source = pair.target
 		else:
-			amount = Decimal(1) / pair.convert(amount, timestamp)
+			amount = amount / pair.price_at(timestamp)
 			source = pair.source
 		if source == target:
 			return amount
