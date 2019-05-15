@@ -5,8 +5,8 @@ from decimal import Decimal
 from currencio.models import Currency
 from currencio.utils import convert
 
-from .. import explorers
 from ..models import Event, Record
+from ..explorers import explorers
 from ..utils import wrap_uploaded_file
 
 
@@ -46,6 +46,7 @@ def parse(data):
 		# Currency should stay the same, so avoid re-fetching, but sanity check
 		if not currency or currency.ticker != cryptocurrency:
 			currency = Currency.objects.get(ticker=cryptocurrency, fiat=False)
+			explorer = explorers.get(currency.slug)
 		# Cryptocurrency purchase
 		if transfer_amount and amount > 0 and transfer_currency:
 			fiat = Currency.objects.get(ticker=transfer_currency, fiat=True)
