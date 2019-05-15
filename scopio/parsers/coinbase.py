@@ -5,14 +5,14 @@ from decimal import Decimal
 from currencio.models import Currency
 from currencio.utils import convert
 
-from ..models import Event, Record
 from ..explorers import explorers
+from ..models import Event, RecordGroup, Record
 from ..utils import wrap_uploaded_file
 
 
 def parse(data):
 	"""
-	Coinbase export CSV have the format:
+	Coinbase export CSV files have the format:
 	
 		"Transactions"
 		USER, EMAIL, WALLET
@@ -36,9 +36,8 @@ def parse(data):
 		order_price, order_currency, order_btc, order_tracking, order_custom, order_paid, recurring, \
 		coinbase_id, blockchain_hash \
 	in reader:
-		id_ = f'coinbase {coinbase_id}'
 		# Check if we've already parsed this transaction
-		if Record.objects.filter(pk=id_).exists():
+		if Record.objects.filter(platform='coinbase', identifier=coinbase_id).exists():
 			transactions_skipped += 1
 			continue
 		timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S %z')
@@ -49,78 +48,148 @@ def parse(data):
 			explorer = explorers.get(currency.slug)
 		# Cryptocurrency purchase
 		if transfer_amount and amount > 0 and transfer_currency:
+			# TODO: Handle non-fiat transfer currencies (may be used in GDAX)
 			fiat = Currency.objects.get(ticker=transfer_currency, fiat=True)
-			# The fee is not included in the price calculation
-			price = (Decimal(transfer_amount) - Decimal(transfer_fee or 0)) / amount
+			price = Decimal(transfer_amount) / amount
+			# Create a group to put all the records into
+			group = RecordGroup.objects.create(timestamp=timestamp)
+			# Create acquisition record and event
 			record = Record.objects.create(
-				pk=id_,
+				group=group,
+				platform='coinbase',
+				identifier=coinbase_id,
 				timestamp=timestamp,
 				amount=amount,
 				currency=currency,
-				price=price,
-				fiat=fiat,
+				needs_event=False,
 			)
-			# Create acquisition tax event
 			event = Event.objects.create(
+				record=record,
 				type=Event.ACQUISITION,
-				timestamp=timestamp,
 				currency=currency,
 				amount=amount,
 				price=convert(fiat, user_currency, price, timestamp),
 			)
-			record.events.add(event)
-			# Create a non-tax event for the fee that was paid
-			if transfer_fee and Decimal(transfer_fee) > 0:
-				event = Event.objects.create(
-					type=Event.FIAT_FEE,
+			# Create fiat expenditure record
+			record = Record.objects.create(
+				group=group,
+				platform='coinbase',
+				identifier=coinbase_id,
+				timestamp=timestamp,
+				amount=-Decimal(transfer_amount),
+				currency=fiat,
+				needs_event=False,
+			)
+			# Create fee record
+			if transfer_fee and transfer_fee_currency:
+				fee_currency = Currency.objects.get(ticker=transfer_currency, fiat=True)
+				record = Record.objects.create(
+					group=group,
+					platform='coinbase',
+					identifier=coinbase_id,
 					timestamp=timestamp,
-					currency=fiat,
-					amount=convert(fiat, user_currency, Decimal(transfer_fee), timestamp),
-					price=None,
+					amount=-Decimal(transfer_fee),
+					currency=fee_currency,
+					is_fee=True,
+					needs_event=False,
 				)
-				record.events.add(event)
 			transactions_parsed += 1
 		# Incoming cryptocurrency transfer
-		elif not transfer_amount and amount > 0:
+		elif not transfer_amount and blockchain_hash and amount > 0:
+			# Try to find matching record group if it was sent from own address
+			group = RecordGroup.objects.filter(
+				records__transaction=blockchain_hash).first()
+			# Create one if one wasn't found
+			group = group or RecordGroup.objects.create(timestamp=timestamp)
+			# Try to find outgoing blockchain transfer with matching amount
+			existing = group.records.filter(
+				transaction=blockchain_hash, currency=currency, amount=-amount)
+			# Create the record
 			record = Record.objects.create(
-				pk=id_,
+				group=group,
+				platform='coinbase',
+				identifier=coinbase_id,
+				transaction=blockchain_hash,
 				timestamp=timestamp,
 				amount=amount,
 				currency=currency,
-				tx_hash=blockchain_hash,
+				needs_event=not existing.exists(),
 			)
+			# Unset need of event from the first maching outgoing transfer.
+			# There's an edge case here where a transaction includes more than
+			# one output with the exact same amount going to different 
+			# addresses, in which case even if one is marked as a transfer to 
+			# own account already, one other will be marked as such. This is 
+			# acceptable.
+			# TODO: Populate from_adress from that transfer?
+			existing = existing.filter(needs_event=True).first()
+			if existing:
+				existing.needs_event = False
+				existing.save()
+			group.refresh_timestamp()
 			transactions_parsed += 1
 		# Outgoing cryptocurrency transfer
-		elif not transfer_amount and amount < 0:
+		elif not transfer_amount and blockchain_hash and to_ and amount < 0:
+			# Try to find matching record group if it was sent to own address
+			group = RecordGroup.objects.filter(
+				records__transaction=blockchain_hash).first()
+			# Create one if one wasn't found
+			group = group or RecordGroup.objects.create(timestamp=timestamp)
+			# Try to find incoming blockchain transfer with matching address
+			existing = group.records.filter(
+				transaction=blockchain_hash,
+				currency=currency,
+				to_address=to_,
+				amount__lte=-amount,
+			).first()
+			# Create the record
 			record = Record.objects.create(
-				pk=id_,
+				group=group,
+				platform='coinbase',
+				identifier=coinbase_id,
+				transaction=blockchain_hash,
 				timestamp=timestamp,
 				amount=amount,
 				currency=currency,
-				tx_hash=blockchain_hash,
+				to_address=to_,
+				needs_event=not existing,
 			)
-			# The transfer fee is not specified, so we get it from the blockchain.
-			# There is a small risk here for currencies such as Bitcoin, where
-			# transaction has multiple inputs/outputs, of someone else making
-			# a transfer to the same address within the same transaction.
-			# TODO: use matching explorer for currency
-			received = -explorers.bitcoin.get_outgoing_amount(blockchain_hash, to_)
-			# Keep in mind amount and received should be negative
-			if received and received > amount:
-				event = Event.objects.create(
-					type=Event.DISPOSAL_FEE,
+			# If we know this transfer to be to own wallet, the difference
+			# between the amount sent and received is the transfer fee, so we 
+			# create a record and disposal event for that.
+			if existing and existing.amount < -amount \
+			and not group.records.filter(is_fee=True).exists():
+				record = Record.objects.create(
+					group=group,
+					platform='coinbase',
+					identifier=coinbase_id,
+					transaction=blockchain_hash,
 					timestamp=timestamp,
+					amount=amount + existing.amount,
 					currency=currency,
-					amount=amount - received,
-					# TODO: let convert do the BTC -> USD conversion as well
+					is_fee=True,
+					needs_event=False,
+				)
+				# TODO: Handle inability to ascertain price
+				event = Event.objects.create(
+					record=record,
+					type=Event.DISPOSAL_FEE,
+					currency=currency,
+					amount=amount + existing.amount,
+					# TODO: Let convert do the conversion to USD as well
 					price=convert(
 						Currency.objects.get(ticker='USD', fiat=True),
 						user_currency,
-						explorers.bitcoin.get_usd_price(timestamp),
+						explorer.get_usd_price(timestamp),
 						timestamp,
 					)
 				)
-				record.events.add(event)
+				existing.needs_event = False
+				existing.save()
+			# TODO: Edge cases:
+			#	Simultaneous withdrawal to same address from multiple accounts
+			#	User parsed exchange hot wallet as own wallet
+			group.refresh_timestamp()
 			transactions_parsed += 1
 		# Not a recognised type of transaction
 		else:

@@ -5,6 +5,8 @@ import requests
 
 from . import Explorer, explorers
 
+
+# TODO: No longer needed, remove
 def get_outgoing_amount(tx_hash, to_address):
 	tx = requests.get(f'https://blockchain.info/rawtx/{tx_hash}').json()
 	for outgoing in tx['out']:

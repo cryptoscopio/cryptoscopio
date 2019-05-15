@@ -36,11 +36,13 @@
 								<td>{{ record.timestamp }}</td>
 								<td>{{ record }}</td>
 								<td>
-									{% for event in record.events.all %}
-										<div class='{{ event.get_style_class }}'>
-											{{ event }}
+									{% if record.event %}
+										<div class='{{ record.event.get_style_class }}'>
+											{{ record.event }}
 										</div>
-									{% endfor %}
+									{% elif record.needs_event %}
+										[input required]
+									{% endif %}
 								</td>
 							</tr>
 						{% endfor %}

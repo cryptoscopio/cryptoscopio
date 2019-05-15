@@ -1,39 +1,46 @@
 from django.db import models
 
 
-class Record(models.Model):
-	id = models.CharField(max_length=1024, primary_key=True)
+class RecordGroup(models.Model):
+	# Earliest timestamp of contained records, cached here for ease of lookups
 	timestamp = models.DateTimeField()
-	amount = models.DecimalField(max_digits=160, decimal_places=32)
+	
+	class Meta:
+		ordering = ['timestamp']
+
+	def refresh_timestamp(self):
+		self.timestamp = self.records.aggregate(models.Min('timestamp'))['timestamp__min']
+		self.save()
+
+
+class Record(models.Model):
+	timestamp = models.DateTimeField()
+	group = models.ForeignKey('RecordGroup', on_delete=models.CASCADE, related_name='records')
 	currency = models.ForeignKey('currencio.Currency', on_delete=models.CASCADE)
-	tx_hash = models.CharField(max_length=1024, blank=True)
-	price = models.DecimalField(
-		max_digits=160, decimal_places=32,
-		null=True, blank=True,
-	)
-	fiat = models.ForeignKey('currencio.Currency',
-		on_delete=models.CASCADE,
-		related_name='fiat_record',
-		null=True, blank=True,
-	)
-	match = models.OneToOneField('Record',
-		on_delete=models.SET_NULL,
-		null=True, blank=True,
-	)
-	events = models.ManyToManyField('Event')
+	amount = models.DecimalField(max_digits=160, decimal_places=32)
+	platform = models.CharField(max_length=64)
+	transaction = models.CharField(max_length=1024)
+	to_address = models.CharField(max_length=1024)
+	from_address = models.CharField(max_length=1024)
+	identifier = models.CharField(max_length=1024)
+	is_fee = models.BooleanField(default=False)
+	needs_event = models.BooleanField(default=True)
 
 	class Meta:
 		ordering = ['timestamp']
 
 	def __str__(self):
-		if self.price:
-			action = 'Purchased' if self.amount >= 0 else 'Sold'
-			return f'{action} {self.currency.format_amount(self.amount)} for {self.fiat.format_amount(self.amount * self.price)}'
-		action = 'Incoming' if self.amount >= 0 else 'Outgoing'
-		return f'{action} transfer of {self.currency.format_amount(self.amount)}'
-
-	def platform(self):
-		return self.id.split()[0]
+		amount = self.currency.format_amount(self.amount)
+		if self.is_fee:
+			action = 'Paid fee of'
+		elif self.platform:
+			if self.transaction:
+				action = 'Received' if self.amount >= 0 else 'Sent'
+			else:
+				action = 'Purchased' if self.amount >= 0 else 'Spent' if self.currency.fiat else 'Sold'
+		else:
+			action = 'Received' if self.amount >= 0 else 'Sent'
+		return f'{action} {amount}'
 
 
 class Event(models.Model):
@@ -50,13 +57,13 @@ class Event(models.Model):
 	)
 
 	type = models.IntegerField(choices=TYPE_CHOICES)
-	timestamp = models.DateTimeField()
+	record = models.OneToOneField('Record', on_delete=models.CASCADE, related_name='event')
 	currency = models.ForeignKey('currencio.Currency', on_delete=models.CASCADE)
 	amount = models.DecimalField(max_digits=160, decimal_places=32)
 	price = models.DecimalField(max_digits=160, decimal_places=32, null=True)
 
 	class Meta:
-		ordering = ['timestamp']
+		ordering = ['record__timestamp']
 
 	def __str__(self):
 		# TODO: replace this with a sane method of getting the price currency
