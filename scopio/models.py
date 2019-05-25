@@ -18,6 +18,9 @@ class Record(models.Model):
 	group = models.ForeignKey('RecordGroup', on_delete=models.CASCADE, related_name='records')
 	currency = models.ForeignKey('currencio.Currency', on_delete=models.CASCADE)
 	amount = models.DecimalField(max_digits=160, decimal_places=32)
+	# Using a separate field instead of relying on the sign of the amount 
+	# because zero amounts are possible, and negative zero cannot be stored
+	outgoing = models.BooleanField()
 	platform = models.CharField(max_length=64)
 	transaction = models.CharField(max_length=1024)
 	to_address = models.CharField(max_length=1024)
@@ -30,16 +33,16 @@ class Record(models.Model):
 		ordering = ['timestamp']
 
 	def __str__(self):
-		amount = self.currency.format_amount(self.amount)
+		amount = self.currency.format_amount(self.amount if not self.outgoing else -self.amount)
 		if self.is_fee:
 			action = 'Paid fee of'
-		elif self.platform:
-			if self.transaction:
-				action = 'Received' if self.amount >= 0 else 'Sent'
+		elif self.platform and not self.transaction:
+			if self.currency.fiat:
+				action = 'Spent' if self.outgoing else 'Credited'
 			else:
-				action = 'Purchased' if self.amount >= 0 else 'Spent' if self.currency.fiat else 'Sold'
+				action = 'Sold' if self.outgoing else 'Purchased'
 		else:
-			action = 'Received' if self.amount >= 0 else 'Sent'
+			action = 'Sent' if self.outgoing else 'Received'
 		return f'{action} {amount}'
 
 

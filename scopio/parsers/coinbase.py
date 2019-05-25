@@ -60,6 +60,7 @@ def parse(data):
 				identifier=coinbase_id,
 				timestamp=timestamp,
 				amount=amount,
+				outgoing=False,
 				currency=currency,
 				needs_event=False,
 			)
@@ -76,7 +77,8 @@ def parse(data):
 				platform='coinbase',
 				identifier=coinbase_id,
 				timestamp=timestamp,
-				amount=-Decimal(transfer_amount),
+				amount=Decimal(transfer_amount),
+				outgoing=True,
 				currency=fiat,
 				needs_event=False,
 			)
@@ -88,7 +90,8 @@ def parse(data):
 					platform='coinbase',
 					identifier=coinbase_id,
 					timestamp=timestamp,
-					amount=-Decimal(transfer_fee),
+					amount=Decimal(transfer_fee),
+					outgoing=True,
 					currency=fee_currency,
 					is_fee=True,
 					needs_event=False,
@@ -102,8 +105,9 @@ def parse(data):
 			# Create one if one wasn't found
 			group = group or RecordGroup.objects.create(timestamp=timestamp)
 			# Try to find outgoing blockchain transfer with matching amount
+			# TODO: Handle outgoing transfers from exchanges, where amount may not match
 			existing = group.records.filter(
-				transaction=blockchain_hash, currency=currency, amount=-amount)
+				transaction=blockchain_hash, currency=currency, amount=amount, outgoing=True)
 			# Create the record
 			record = Record.objects.create(
 				group=group,
@@ -112,6 +116,7 @@ def parse(data):
 				transaction=blockchain_hash,
 				timestamp=timestamp,
 				amount=amount,
+				outgoing=False,
 				currency=currency,
 				needs_event=not existing.exists(),
 			)
@@ -121,7 +126,7 @@ def parse(data):
 			# addresses, in which case even if one is marked as a transfer to 
 			# own account already, one other will be marked as such. This is 
 			# acceptable.
-			# TODO: Populate from_adress from that transfer?
+			# TODO: Populate to_address from that transfer?
 			existing = existing.filter(needs_event=True).first()
 			if existing:
 				existing.needs_event = False
@@ -141,6 +146,7 @@ def parse(data):
 				currency=currency,
 				to_address=to_,
 				amount__lte=-amount,
+				outgoing=False,
 			).first()
 			# Create the record
 			record = Record.objects.create(
@@ -149,7 +155,8 @@ def parse(data):
 				identifier=coinbase_id,
 				transaction=blockchain_hash,
 				timestamp=timestamp,
-				amount=amount,
+				amount=-amount,
+				outgoing=True,
 				currency=currency,
 				to_address=to_,
 				needs_event=not existing,
@@ -157,15 +164,15 @@ def parse(data):
 			# If we know this transfer to be to own wallet, the difference
 			# between the amount sent and received is the transfer fee, so we 
 			# create a record and disposal event for that.
-			if existing and existing.amount < -amount \
-			and not group.records.filter(is_fee=True).exists():
+			if existing and not group.records.filter(is_fee=True).exists():
 				record = Record.objects.create(
 					group=group,
 					platform='coinbase',
 					identifier=coinbase_id,
 					transaction=blockchain_hash,
 					timestamp=timestamp,
-					amount=amount + existing.amount,
+					amount=-amount - existing.amount,
+					outgoing=True,
 					currency=currency,
 					is_fee=True,
 					needs_event=False,
@@ -175,7 +182,7 @@ def parse(data):
 					record=record,
 					type=Event.DISPOSAL_FEE,
 					currency=currency,
-					amount=amount + existing.amount,
+					amount=-amount - existing.amount,
 					# TODO: Let convert do the conversion to USD as well
 					price=convert(
 						Currency.objects.get(ticker='USD', fiat=True),
