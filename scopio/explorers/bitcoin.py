@@ -17,6 +17,7 @@ def get_outgoing_amount(tx_hash, to_address):
 class BitcoinExplorer(Explorer):
 	MAX_LIMIT = 50
 	ADDRESS_API = 'https://blockchain.info/rawaddr/{address}?limit={limit}&offset={offset}'
+	CURRENCY_SLUG = 'bitcoin'
 
 	# TODO: Move logic to data import command
 	def get_usd_price(timestamp):
