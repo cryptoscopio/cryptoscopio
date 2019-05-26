@@ -4,7 +4,7 @@ from currencio.models import Currency
 
 
 class Explorer(object):
-	def get_json(url):
+	def get_json(self, url):
 		# TODO: retry on failure
 		return requests.get(url).json()
 

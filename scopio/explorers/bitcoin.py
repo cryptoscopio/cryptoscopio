@@ -20,7 +20,7 @@ class BitcoinExplorer(Explorer):
 	CURRENCY_SLUG = 'bitcoin'
 
 	# TODO: Move logic to data import command
-	def get_usd_price(timestamp):
+	def get_usd_price(self, timestamp):
 		"""
 		Returns the price of BTC in USD at given timestamp on Coinbase.
 
@@ -62,7 +62,9 @@ class BitcoinExplorer(Explorer):
 			params=params
 		)
 		time, low, high, open_, close, volume = candles.json(parse_float=Decimal)[0]
-		assert time == minute_start.timestamp()
+		if time != minute_start.timestamp():
+			print(f'WARNING: candle start timestamp {time} doesn\'t match '
+				f'minute start timestamp {minute_start.timestamp()}')
 		return (low + high) / Decimal(2)
 		# Or maybe...?
 		return open_ + (Decimal(timestamp.timestamp()) - Decimal(minute_pice.timestamp())) / Decimal(60) * (close - open_)
