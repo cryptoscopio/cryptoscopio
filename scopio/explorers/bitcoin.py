@@ -1,9 +1,13 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import requests
 
+from currencio.models import Currency
+from currencio.utils import convert
+
 from . import Explorer, explorers
+from ..models import Event, Record, RecordGroup
 
 
 # TODO: No longer needed, remove
@@ -69,6 +73,221 @@ class BitcoinExplorer(Explorer):
 		# Or maybe...?
 		return open_ + (Decimal(timestamp.timestamp()) - Decimal(minute_pice.timestamp())) / Decimal(60) * (close - open_)
 
+	def transactions_for_address(self, address):
+		"""
+		An iterator of transaction dictionaries for the provided public
+		Bitcoin address.
+		"""
+		offset = 0
+		while True:
+			data = self.get_json(self.ADDRESS_API.format(
+				address=address,
+				limit=self.MAX_LIMIT,
+				offset=offset,
+			))
+			for transaction in data['txs']:
+				yield transaction
+			if len(data['txs']) < self.MAX_LIMIT:
+				break
+			offset += self.MAX_LIMIT
+
+	def parse_address(self, address):
+		"""
+		Create Records for the transactions associated with the provided public
+		Bitcoin address.
+		"""
+		# Other public addresses likely to represent the same private key, 
+		# deduced from transaction inputs
+		# TODO: Suggest importing these other addresses
+		other_addresses = set()
+		for transaction in self.transactions_for_address(address):
+			input_addresses = [i['prev_out']['addr'] for i in transaction['inputs']]
+			total_input = sum(i['prev_out']['value'] for i in transaction['inputs'])
+			total_output = sum(o['value'] for o in transaction['out'])
+			timestamp=datetime.fromtimestamp(transaction['time'], tz=timezone.utc)
+			# Try to find existing record group for this transaction
+			group = RecordGroup.objects.filter(
+				records__transaction=transaction['hash']).first()
+			# Create one if one wasn't found
+			group = group or RecordGroup.objects.create(timestamp=timestamp)
+			if address in input_addresses:
+				# If the transaction is drawing from an input that was sent to 
+				# this address, we consider it an outgoing transfer, because it
+				# indicates that the initiator of this transaction has access
+				# to the private key for that address.
+				for output in transaction['out']:
+					# Check if we've parsed this transaction output before as 
+					# an outgoing transfer
+					if Record.objects.filter(
+						transaction=transaction['hash'],
+						currency=self.currency,
+						outgoing=True,
+						identifier=output['n'],
+					).exists():
+						continue
+					amount = Decimal(output['value']) / Decimal(10 ** 8)
+					# Check for a matching incoming transfer on a parsed address
+					existing = group.records.filter(
+						transaction=transaction['hash'],
+						currency=self.currency,
+						outgoing=False,
+						identifier=output['n'],
+					)
+					if not existing:
+						# Check for a matching incoming transfer on an exchange.
+						# If the amounts don't match due to an incoming fee, 
+						# it's up to the user to match them, which is when a
+						# record for that fee will be created.
+						existing = group.records.filter(
+							transaction=transaction['hash'],
+							currency=self.currency,
+							amount=amount,
+							outgoing=False,
+							platform__gt='',
+						)
+					# Create a record for this transaction output
+					record = Record.objects.create(
+						timestamp=timestamp,
+						group=group,
+						currency=self.currency,
+						amount=amount,
+						outgoing=True,
+						transaction=transaction['hash'],
+						to_address=output['addr'],
+						identifier=output['n'],
+						needs_event=not existing,
+					)
+					if existing:
+						# There's a rabbit hole of an edge case here when there
+						# are multiple outputs of the same amount going to an
+						# exchange. We gloss over it by marking the first
+						# unmatched possible match as a match.
+						existing = existing.filter(needs_event=True).first()
+						if existing:
+							existing.needs_event = False
+							existing.save()
+				# Create a record and event for the transaction fee
+				tx_fee = Decimal(total_output - total_input) / Decimal(10 ** 8)
+				if tx_fee and not group.records.filter(
+					currency=self.currency, amount=tx_fee, is_fee=True,
+				).exists():
+					record = Record.objects.create(
+						timestamp=timestamp,
+						group=group,
+						currency=self.currency,
+						amount=tx_fee,
+						outgoing=True,
+						transaction=transaction['hash'],
+						is_fee=True,
+						needs_event=False,
+					)
+					event = Event.objects.create(
+						type=Event.DISPOSAL_FEE,
+						record=record,
+						currency=self.currency,
+						amount=tx_fee,
+						# TODO: Move price calculation to a context with user currency access
+						price=convert(
+							Currency.objects.get(ticker='USD', fiat=True),
+							Currency.objects.get(ticker='AUD', fiat=True),
+							self.get_usd_price(timestamp),
+							timestamp,
+						)
+					)
+				# Any other addresses appearing in the inputs are likely to be
+				# alternate public keys for the same private key, since the 
+				# user initiating this transaction was able to draw from them.
+				other_addresses |= set(input_addresses) - set([address])
+			# Go through the outputs again, this time looking for matching
+			# destination addresses, and parse those as incoming transfers.
+			# Not using an `else` here ensures that any transfers to the same 
+			# address as the sender are parsed both as outgoing and incoming.
+			for output in transaction['out']:
+				# Only the output sent to this address is relevant, there may
+				# be many others to other addresses
+				if output['addr'] == address:
+					# Check if we've parsed this transaction output before as 
+					# an incoming transfer
+					if Record.objects.filter(
+						transaction=transaction['hash'],
+						currency=self.currency,
+						outgoing=False,
+						identifier=output['n'],
+					).exists():
+						continue
+					amount = Decimal(output['value']) / Decimal(10 ** 8)
+					# Check for a matching outgoing transfer on a parsed address
+					existing = group.records.filter(
+						transaction=transaction['hash'],
+						currency=self.currency,
+						outgoing=True,
+						identifier=output['n'],
+					).first()
+					if not existing:
+						# Check for a matching outgoing transfer on an exchange.
+						# It will be common for the amount to be larger on such
+						# a match, since exchanges include tranfer fees as part
+						# of the amount in an export.
+						existing = group.records.filter(
+							transaction=transaction['hash'],
+							currency=self.currency,
+							to_address=address,
+							outgoing=True,
+							platform__gt='',
+							amount__gte=amount,
+						).first()
+					# Create a record for this transaction output
+					record = Record.objects.create(
+						timestamp=timestamp,
+						group=group,
+						currency=self.currency,
+						amount=amount,
+						outgoing=False,
+						transaction=transaction['hash'],
+						to_address=address,
+						identifier=output['n'],
+						needs_event=not existing,
+					)
+					if existing and amount < existing.amount and not group.records.filter(
+						currency=self.currency,
+						amount=existing.amount - amount,
+						is_fee=True,
+					).exists():
+						# If we found a matching outgoing transfer from an
+						# exchange, but its amount is larger, we consider the
+						# difference as the transfer fee and create a record.
+						record = Record.objects.create(
+							timestamp=timestamp,
+							group=group,
+							currency=self.currency,
+							amount=existing.amount - amount,
+							outgoing=True,
+							transaction=transaction['hash'],
+							is_fee=True,
+							needs_event=False,
+						)
+						event = Event.objects.create(
+							type=Event.DISPOSAL_FEE,
+							record=record,
+							currency=self.currency,
+							amount=existing.amount - amount,
+							# TODO: Move price calculation to a context with user currency access
+							price=convert(
+								Currency.objects.get(ticker='USD', fiat=True),
+								Currency.objects.get(ticker='AUD', fiat=True),
+								self.get_usd_price(timestamp),
+								timestamp,
+							)
+						)
+					# TODO: Edge case where two outputs with the same amount
+					# are sent to an exchange and to own address, but own 
+					# address is parsed after the exchange. This can end up 
+					# matching the first output to both the exchange and own 
+					# wallet, leaving the second output unmatched.
+					if existing:
+						existing.needs_event = False
+						existing.save()
+			group.refresh_timestamp()
 				
 # Register the bitcoin explorer
 explorers['bitcoin'] = BitcoinExplorer()
