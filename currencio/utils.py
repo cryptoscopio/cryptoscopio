@@ -56,10 +56,6 @@ def _find_paths(source, target, timestamp, depth=0, seen=[], path=[]):
 				yield new_path
 
 
-class PathNotFound(Exception):
-	pass
-
-
 def convert(source, target, amount, timestamp):
 	# Check for no-op
 	if source == target:
@@ -68,7 +64,7 @@ def convert(source, target, amount, timestamp):
 	# available movement data
 	paths = list(_find_paths(source, target, timestamp))
 	if not paths:
-		raise PathNotFound()
+		return None
 	# Trim down results to the one(s) with fewest conversions
 	min_length = len(sorted(paths, key=len)[0])
 	paths = [path for path in paths if len(path) == min_length]
