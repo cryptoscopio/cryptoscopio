@@ -102,8 +102,14 @@ class BitcoinExplorer(Explorer):
 		# TODO: Exclude Bech32 addresses, since we can't look them up
 		other_addresses = set()
 		for transaction in self.transactions_for_address(address):
-			input_addresses = [i['prev_out']['addr'] for i in transaction['inputs']]
-			total_input = sum(i['prev_out']['value'] for i in transaction['inputs'])
+			input_addresses = [
+				input_['prev_out']['addr'] \
+				for input_ in transaction['inputs'] if 'prev_out' in input_
+			]
+			total_input = sum(
+				input_['prev_out']['value'] \
+				for input_ in transaction['inputs'] if 'prev_out' in input_
+			)
 			total_output = sum(o['value'] for o in transaction['out'])
 			timestamp=datetime.fromtimestamp(transaction['time'], tz=timezone.utc)
 			# Try to find existing record group for this transaction
@@ -205,8 +211,9 @@ class BitcoinExplorer(Explorer):
 			# address as the sender are parsed both as outgoing and incoming.
 			for output in transaction['out']:
 				# Only the output sent to this address is relevant, there may
-				# be many others to other addresses
-				if output['addr'] == address:
+				# be many others to other addresses. No address is specified
+				# for null data transactions.
+				if 'addr' in output and output['addr'] == address:
 					# Check if we've parsed this transaction output before as 
 					# an incoming transfer
 					if Record.objects.filter(
@@ -247,9 +254,20 @@ class BitcoinExplorer(Explorer):
 						transaction=transaction['hash'],
 						to_address=address,
 						identifier=output['n'],
-						needs_event=not existing,
+						needs_event=bool(input_addresses) and not existing,
 					)
-					if existing and amount < existing.amount and not group.records.filter(
+					# Check if this was a mining reward and create zero-cost 
+					# acquisition event if it is
+					if not input_addresses:
+						event = Event.objects.create(
+							type=Event.ACQUISITION,
+							record=record,
+							currency=self.currency,
+							amount=amount,
+							price=Decimal(0),
+						)
+					if existing and amount < existing.amount \
+					and not group.records.filter(
 						currency=self.currency,
 						amount=existing.amount - amount,
 						is_fee=True,
