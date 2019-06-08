@@ -3,7 +3,7 @@ import requests
 from currencio.models import Currency
 
 
-class Explorer(object):
+class Explorer:
 	def get_json(self, url):
 		# TODO: retry on failure
 		return requests.get(url).json()

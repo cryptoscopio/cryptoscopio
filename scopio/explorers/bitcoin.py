@@ -99,6 +99,7 @@ class BitcoinExplorer(Explorer):
 		# Other public addresses likely to represent the same private key, 
 		# deduced from transaction inputs
 		# TODO: Suggest importing these other addresses
+		# TODO: Exclude Bech32 addresses, since we can't look them up
 		other_addresses = set()
 		for transaction in self.transactions_for_address(address):
 			input_addresses = [i['prev_out']['addr'] for i in transaction['inputs']]
@@ -114,7 +115,7 @@ class BitcoinExplorer(Explorer):
 				# If the transaction is drawing from an input that was sent to 
 				# this address, we consider it an outgoing transfer, because it
 				# indicates that the initiator of this transaction has access
-				# to the private key for that address.
+				# to the private key for that address (or similar authority).
 				for output in transaction['out']:
 					# Check if we've parsed this transaction output before as 
 					# an outgoing transfer
@@ -167,7 +168,7 @@ class BitcoinExplorer(Explorer):
 							existing.needs_event = False
 							existing.save()
 				# Create a record and event for the transaction fee
-				tx_fee = Decimal(total_output - total_input) / Decimal(10 ** 8)
+				tx_fee = Decimal(total_input - total_output) / Decimal(10 ** 8)
 				if tx_fee and not group.records.filter(
 					currency=self.currency, amount=tx_fee, is_fee=True,
 				).exists():
