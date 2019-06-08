@@ -17,6 +17,12 @@ class Explorer:
 
 explorers = {}
 
+# A class decorator registering an instance of it as an explorer with given name
+def register_explorer(name):
+	def wrapped(cls):
+		explorers[name] = cls()
+		return cls
+	return wrapped
 
 # Import all available explorers, so they register themselves
 from . import bitcoin

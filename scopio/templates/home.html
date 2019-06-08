@@ -11,7 +11,9 @@
 		<header>
 			<select id='upload-select' disabled>
 				<option value='' class='default-option'>Upload records...</option>
-				<option value='coinbase' class='coinbase'>Coinbase</option>
+				{% for name, parser in parsers.items %}
+					<option value='{{ name }}' class='{{ name }}'>{{ parser.DISPLAY_NAME }}</option>
+				{% endfor %}
 			</select>
 			<h1>Cryptoscopio</h1>
 			<form action='.' method='POST'>

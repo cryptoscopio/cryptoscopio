@@ -1,64 +1,10 @@
-from collections import defaultdict
-from datetime import timedelta
 from decimal import Decimal
-from hashlib import sha256
-import json
 
 from django.test import TestCase
-from django.utils.timezone import now
 
+from .utils import TestBitcoinExplorer
 from ..explorers import explorers
-from ..explorers.bitcoin import BitcoinExplorer
 from ..models import RecordGroup, Record, Event
-
-
-class TestBitcoinExplorer(BitcoinExplorer):
-	"""
-	Provides an emulated Bitcoin blockchain where arbitrary transactions can
-	be added for testing purposes. Overrides `transactions_for_address` method
-	to return those transactions in the same manner as `BitcoinExplorer` would,
-	i.e. using the same key names as the blockchain.info API JSON dicts.
-	"""
-
-	def __init__(self):
-		# A mapping of addresses to transactions that involve the address as
-		# either an input or output, in reverse chronological order
-		self._addresses = defaultdict(list)
-
-	def send(self, inputs, outputs):
-		"""
-		Takes a list of inputs (as returned as outputs by a previous send()
-		call), and a list of outputs, which are tuples of (amount, address),
-		and creates a transaction spending the input to generate the outputs.
-		Returns the transaction hash and a list of generated outputs.
-		"""
-		# Pretend it's yesterday so real-time price look-ups don't fail.
-		# TODO: Remove this once we're no longer using real-time lookups
-		timestamp = (now() - timedelta(1)).timestamp()
-		# We rely on transaction being mutable, since we continue modifying it
-		# after adding it to the transaction lists for the addresses involved
-		transaction = {'inputs': [], 'out': [], 'time': timestamp}
-		# Add the inputs to the transaction and associate it with the
-		# destination addresses in the inputs
-		for input_ in inputs:
-			transaction['inputs'] += [{'prev_out': input_}]
-			self._addresses[input_['addr']].insert(0, transaction)
-		# Add the outputs to the transaction and associate it with the
-		# destination addresses of the outputs
-		for index, (amount, address) in enumerate(outputs):
-			transaction['out'] += [{
-				'addr': address, 'value': int(amount), 'n': index }]
-			# Avoid duplicate records when sending to same address as input
-			if transaction not in self._addresses[address]:
-				self._addresses[address].insert(0, transaction)
-		# Distant approximation of what Bitcoin does to get tx hash, kinda
-		# pointless, but why not?
-		transaction['hash'] = \
-			sha256(json.dumps(transaction).encode('utf-8')).hexdigest()
-		return transaction['hash'], transaction['out']
-
-	def transactions_for_address(self, address):
-		return self._addresses[address]
 
 
 class ParseBitcoinAddressTestCase(TestCase):
@@ -241,3 +187,26 @@ class ParseBitcoinAddressTestCase(TestCase):
 			event__price__isnull=True,
 		)
 
+
+"""
+Parse incoming exchange transfer with tx "tx1" and amount "a1".
+Create transaction with two outputs, to "addr1" and "addr2", both with amount "a1".
+Parse address that includes that transaction.
+Output to "addr1" will be matched with the incoming exchange transfer and have needs_event=False.
+Output to "addr2" will have needs_event=True.
+Parse "addr1" as own address.
+Output to "addr2" should now have needs_event=False.
+	The output to "addr1" should be unmatched from exchange transfer, and matched with incoming transfer to "addr2".
+	The output to "addr2" should be matched to exchange transfer.
+
+Parse two incoming exchange transfers, both with amount "a1" and tx "tx1".
+Create transaction with two outputs for to "addr1" and amount "a1".
+Parse address that includes that transaction as outgoing.
+Assert that both incoming exchange transfers have been matched with the outputs.
+
+Parse incoming exchange transfer with amount "a1" and "tx1".
+Create transaction with output of "a1" to address "addr1".
+Have the user mark the exchange transfer as from own address, but refuse to parse the address.
+Parse address that includes that transaction as outgoing.
+Assert that the output has not been matched, because the onus is now on the user to match them.
+"""

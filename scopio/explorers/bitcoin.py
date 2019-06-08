@@ -6,7 +6,7 @@ import requests
 from currencio.models import Currency
 from currencio.utils import convert
 
-from . import Explorer, explorers
+from . import Explorer, register_explorer
 from ..models import Event, Record, RecordGroup
 
 
@@ -18,10 +18,12 @@ def get_outgoing_amount(tx_hash, to_address):
 			return Decimal(outgoing['value']) / Decimal(10**8)
 
 
+@register_explorer('bitcoin')
 class BitcoinExplorer(Explorer):
 	MAX_LIMIT = 50
 	ADDRESS_API = 'https://blockchain.info/rawaddr/{address}?limit={limit}&offset={offset}'
 	CURRENCY_SLUG = 'bitcoin'
+	DISPLAY_NAME = 'Bitcoin'
 
 	# TODO: Move logic to data import command
 	def get_usd_price(self, timestamp):
@@ -307,7 +309,4 @@ class BitcoinExplorer(Explorer):
 						existing.needs_event = False
 						existing.save()
 			group.refresh_timestamp()
-				
-# Register the bitcoin explorer
-explorers['bitcoin'] = BitcoinExplorer()
 
