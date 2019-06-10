@@ -9,16 +9,12 @@
 	</head>
 	<body>
 		<header>
-			<select id='upload-select' disabled>
-				<option value='' class='default-option'>Upload records...</option>
-				{% for name, parser in parsers.items %}
-					<option value='{{ name }}' class='{{ name }}'>{{ parser.DISPLAY_NAME }}</option>
-				{% endfor %}
-			</select>
 			<h1>Cryptoscopio</h1>
-			<form action='.' method='POST'>
-				<input type='file' id='upload-input' name='upload-input' accept='.csv' multiple>
-			</form>
+			<menu>
+				<li data-target='parse-address'>Parse addresses</li>
+				<li data-target='upload-records'>Upload records</li>
+				<li data-target='settings'>Settings</li>
+			</menu>
 		</header>
 		<main>
 			{% if records.count %}
@@ -54,5 +50,86 @@
 				<p>No records imported yet. Use the "Upload records" dropdown to import some.</p>
 			{% endif %}
 		</main>
+		<dialog id='results' {% if results %}class='open'{% endif %}>
+			<div class='dialog-container'>
+				<h2>{{ results.title }}</h2>
+				<ul>
+					{% for message in results.messages %}
+						<li class='{{ message.type }}'>
+							{{ message.text }}
+							{% if message.notes %}
+								<ul>
+									{% for note in message.notes %}
+										<li class='{{ note.type }}'>
+											{{ note.text }}
+										</li>
+									{% endfor %}
+								</ul>
+							{% endif %}
+						</li>
+					{% endfor %}
+				</ul>
+				<input type='button' value='OK' class='ok-button'>
+			</div>
+		</dialog>
+		<dialog id='parse-address'>
+			<form action='{% url "parse-address" %}' method='POST' class='dialog-container'>
+				{% csrf_token %}
+				<h2>Parse addresses</h2>
+				{{ parse_address_form }}
+				<input type='submit' value='Parse'>
+				<input type='button' value='Cancel'>
+			</form>
+		</dialog>
+		<dialog id='parse-additional' {% if additional %}class='pending'{% endif %}>
+			<form action='{% url "parse-address" %}' method='POST' class='dialog-container'>
+				{% csrf_token %}
+				<h2>Parse additional addresses</h2>
+				<p>
+					While parsing the addresses you specified, we detected the following additional 
+					addresses that may belong to you. Would you like to parse them?
+				</p>
+				<details>
+					<summary>Learn more</summary>
+					<p>
+						Transactions in Bitcoin don't have a "from" address. Instead, they draw from 
+						a list of "inputs": previous outgoing transactions. When parsing the 
+						addresses you provided, we noticed that some of the outgoing transactions 
+						were drawing from inputs that were sent to addresses that we hadn't parsed 
+						for you before. Since you were able to spend those inputs, the most likely 
+						scenario is that those addresses were alternate public addresses for a 
+						wallet that belongs to you.
+					</p>
+					<p>
+						This assumption doesn't always hold true. If you have been transacting with 
+						a script address, or if you've been using a tumbler or similar obfuscation 
+						service, then it's probably a bad idea to import these addresses.
+					</p>
+				</details>
+				<input type='hidden' name='blockchain' value='{{ additional.blockchain }}'>
+				<textarea name='addresses' cols='40' rows='10' required>{{ additional.addresses }}</textarea>
+				<input type='submit' value='Parse'>
+				<input type='button' value='Cancel'>
+			</form>
+		</dialog>
+		<dialog id='upload-records'>
+			<form action='{% url "upload-records" %}' method='POST' enctype="multipart/form-data" class='dialog-container'>
+				{% csrf_token %}
+				<h2>Upload records</h2>
+				{{ upload_records_form }}
+				<input type='submit' value='Upload'>
+				<input type='button' value='Cancel'>
+			</form>
+		</dialog>
+		<dialog id='settings'>
+			<form action='' method='POST' class='dialog-container'>
+				{% csrf_token %}
+				<h2>Settings</h2>
+				<p>TODO: Settings to change base currency, timezone, EOFY dates, etc.</p>
+				{{ settings_form }}
+				<input type='submit' value='Confirm'>
+				<input type='button' value='Cancel'>
+			</form>
+		</dialog>
 	</body>
 </html>
