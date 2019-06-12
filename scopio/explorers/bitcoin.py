@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from functools import reduce
+from hashlib import sha256
 
 import requests
 
@@ -75,6 +77,38 @@ class BitcoinExplorer(Explorer):
 		# Or maybe...?
 		return open_ + (Decimal(timestamp.timestamp()) - Decimal(minute_pice.timestamp())) / Decimal(60) * (close - open_)
 
+	def validate_address(self, address):
+		"""
+		Validate whether provided address is a valid Bitcoin public address
+		that we're able to query transactions for. Returns informative error 
+		message if validation fails, or None if it succeeds.
+		"""
+		base58_map = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+		# The blockchain.info explorer doesn't index Bech32 addresses
+		# introduced with SegWit, so we can't query their transactions. If we 
+		# want to support them, there are other explorers we can use instead:
+		# https://en.bitcoin.it/wiki/Bech32_adoption#Blockchain_Explorers
+		if address.startswith('bc1'):
+			return 'Bech32 addresses are not currently supported'
+		# See this reference for possible address prefixes:
+		# https://en.bitcoin.it/wiki/List_of_address_prefixes
+		if not address[0] in '13':
+			return 'Address is not a mainnet public key or script'
+		# Rudimentary validity checks
+		if not set(address).issubset(base58_map):
+			return 'Address contains invalid characters'
+		if len(address) > 34 or len(address) < 26:
+			return 'Address length is not within a valid range'
+		# Calculate and verify the checksum, see here for more info:
+		# https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
+		decoded = reduce(
+			lambda prev, next: prev * 58 + base58_map.index(next), address, 0
+		).to_bytes(25, 'big')
+		checksum = sha256(sha256(decoded[:-4]).digest()).digest()[:4]
+		if decoded[-4:] != checksum[:4]:
+			return 'Address failed integrity checks, may be mistyped'
+		return None
+
 	def transactions_for_address(self, address):
 		"""
 		An iterator of transaction dictionaries for the provided public
@@ -101,7 +135,6 @@ class BitcoinExplorer(Explorer):
 		# Other public addresses likely to represent the same private key, 
 		# deduced from transaction inputs
 		# TODO: Suggest importing these other addresses
-		# TODO: Exclude Bech32 addresses, since we can't look them up
 		other_addresses = set()
 		for transaction in self.transactions_for_address(address):
 			input_addresses = [
@@ -206,6 +239,7 @@ class BitcoinExplorer(Explorer):
 				# Any other addresses appearing in the inputs are likely to be
 				# alternate public keys for the same private key, since the 
 				# user initiating this transaction was able to draw from them.
+				# TODO: Filter out addresses we've already parsed
 				other_addresses |= set(input_addresses) - set([address])
 			# Go through the outputs again, this time looking for matching
 			# destination addresses, and parse those as incoming transfers.

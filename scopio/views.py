@@ -31,8 +31,20 @@ class ParseAddressView(FormView):
 		if form.is_valid():
 			results = {'title': 'Addresses parsed', 'messages': []}
 			explorer = explorers[form.cleaned_data['blockchain']]
-			for address in form.cleaned_data['addresses'].split():
-				# TODO: Validate address first
+			# Separate multiple addresses and discard whitespace
+			addresses = filter(bool, form.cleaned_data['addresses'].split())
+			for address in addresses:
+				error = explorer.validate_address(address)
+				if error:
+					results['messages'] += [{
+						'type': 'error',
+						'text': f'Failed to parse address {address}',
+						'notes': [{
+							'type': 'info',
+							'text': error,
+						}]
+					}]
+					continue
 				# TODO: Wrap in transaction control
 				explorer.parse_address(address)
 		else:

@@ -8,6 +8,40 @@ from django.utils.timezone import now
 from ..explorers.bitcoin import BitcoinExplorer
 
 
+def generate_bitcoin_address(self, key):
+	"""
+	Return a valid Bitcoin address for a given public key, using a distant
+	approximation of how Bitcoin does it, because why not?
+
+	Ideally, the first line should be replaced by:
+
+		address = hashlib.new('ripemd-160');
+		address.update(hashlib.sha256(key.encode('utf-8').digest())
+		address = b'\x00' + address.digest()
+
+	But to avoid needlessly requiring Python to be compiled against an OpenSSL
+	version	with RIPEMD-160 support, we just use the first 20 bytes of the
+	SHA-256 hash instead.
+	"""
+	# Get a 20-byte hash of the key and append the version byte
+	address = b'\x00' + sha256(key.encode('utf-8').digest()[:20]
+	# Calculate and append the checksum
+	address += sha256(sha256(address).digest()).digest()[:4]
+	# Count leading zeroes
+	leading = len(address) - len(address.lstrip(b'\x00'))
+	# Convert to an integer
+	address = int.from_bytes(address, 'big')
+	# Encode to Base58
+	encoded = ''
+	base58_map = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+	while address:
+		address, remainder = divmod(address, 58)
+		encoded = base58_map[remainder] + encoded
+	# Add leading zeroes (1 in Base58) back
+	encoded = '1' * leading + encoded
+	return encoded
+
+
 class TestBitcoinExplorer(BitcoinExplorer):
 	"""
 	Provides an emulated Bitcoin blockchain where arbitrary transactions can
