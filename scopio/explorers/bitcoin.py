@@ -237,8 +237,8 @@ class BitcoinExplorer(Explorer):
 						)
 					)
 				# Any other addresses appearing in the inputs are likely to be
-				# alternate public keys for the same private key, since the 
-				# user initiating this transaction was able to draw from them.
+				# alternate keys from the same wallet, since the user 
+				# initiating this transaction was able to draw from them.
 				# TODO: Filter out addresses we've already parsed
 				other_addresses |= set(input_addresses) - set([address])
 			# Go through the outputs again, this time looking for matching
