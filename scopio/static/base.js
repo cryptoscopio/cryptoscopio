@@ -45,4 +45,11 @@ window.addEventListener('load', function(event){
 			dialog.className = 'open';
 		}
 	}
+
+	for(row of document.querySelectorAll('tr:first-child')){
+		row.addEventListener('click', function(e){
+			let tbody = e.target.closest('tbody');
+			tbody.className = tbody.className ? '' : 'closed';
+		});
+	}
 });

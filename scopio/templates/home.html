@@ -17,37 +17,40 @@
 			</menu>
 		</header>
 		<main>
-			{% if records.count %}
+			{% if groups.count %}
 				<table>
-					<thead>
-						<tr>
-							<th>Platform</th>
-							<th>Date</th>
-							<th>Action</th>
-							<th>Tax events</th>
-						</tr>
-					</thead>
-					<tbody>
-						{% for record in records %}
+					{% for group in groups %}
+						<tbody class='{% if not group.needs_events %}closed{% endif %}'>
 							<tr>
-								<td>{{ record.platform }}</td>
-								<td>{{ record.timestamp }}</td>
-								<td>{{ record }}</td>
-								<td>
-									{% if record.event %}
-										<div class='{{ record.event.get_style_class }}'>
-											{{ record.event }}
-										</div>
-									{% elif record.needs_event %}
-										[input required]
-									{% endif %}
-								</td>
+								<th><span class='expand-arrow'>&#x25bd</span></th>
+								<th>{{ group.timestamp }}</th>
+								<th>{{ group.summary }}</th>
+								<th></th>
 							</tr>
-						{% endfor %}
-					</tbody>
+							{% for record in group.records.all %}
+								<tr>
+									<td></td>
+									<td></td>
+									<td>{{ record }}</td>
+									<td>
+										{% if record.event %}
+											<div class='{{ record.event.get_style_class }}'>
+												{{ record.event }}
+											</div>
+										{% elif record.needs_event %}
+											[input required]
+										{% endif %}
+									</td>
+								</tr>
+							{% endfor %}
+						</tbody>
+					{% endfor %}
 				</table>
 			{% else %}
-				<p>No records imported yet. Use the "Upload records" dropdown to import some.</p>
+				<p>
+					No records imported yet. Select "Parse addresses" or "Upload records" on the
+					top right to import some.
+				</p>
 			{% endif %}
 		</main>
 		<dialog id='results' {% if results %}class='open'{% endif %}>

@@ -12,6 +12,11 @@ class RecordGroup(models.Model):
 		self.timestamp = self.records.aggregate(models.Min('timestamp'))['timestamp__min']
 		self.save()
 
+	def needs_events(self):
+		# Assumes the group has been fetched with `prefetch_related` on 
+		# records, so it can be queried without hitting the database
+		return any(record.needs_event for record in self.records.all())
+
 
 class Record(models.Model):
 	timestamp = models.DateTimeField()

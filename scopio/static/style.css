@@ -1,10 +1,14 @@
 :root {
-	--grey: #FAF1EF;
+	--grey: #F8F1EF;
 	--dark:	#0A0D21;
 	--navy: #1A2038;
-	--navy-bg: #1A2038CC;
+	--navy-80: #1A2038CC;
 	--lite: #8EA8D7;
+	--lite-12: #8EA8D720;
+	--lite-20: #8EA8D735;
+	--lite-33: #8EA8D755;
 	--gold: #F0CB76;
+	--gold-33: #F0CB7655;
 }
 html {
 	font-size: 10px;
@@ -12,19 +16,20 @@ html {
 body {
 	margin: 0;
 	padding: 0;
-	color: var(--navy);
 	background-color: var(--grey);
 }
-
+body * {
+	color: var(--navy);
+}
 header {
 	display: flex;
 	align-items: center;
 	padding: 0 2em;
 	background-color: var(--navy);
 	border-bottom: 2px solid var(--lite);
-	color: var(--gold);
 }
 header h1 {
+	color: var(--gold);
 	text-shadow: 2px 2px 1px var(--dark);
 }
 header menu {
@@ -36,6 +41,7 @@ header menu li {
 	margin: 0 0.5em;
 	font-family: sans-serif;
 	font-weight: bold;
+	color: var(--gold);
 	text-shadow: 2px 2px 1px var(--dark);
 	border: solid 2px var(--gold);
 	border-radius: 5px;
@@ -54,7 +60,7 @@ dialog {
 	height: 100%;
 	width: 100%;
 	position: fixed;
-	background-color: var(--navy-bg);
+	background-color: var(--navy-80);
 }
 dialog.open {
 	display: flex;
@@ -131,3 +137,68 @@ dialog li.error::before {
 	color: red;
 }
 
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+tbody th {
+	text-align: left;
+	cursor: pointer;
+	padding: 0.5em;
+}
+th:nth-child(2) {
+	width: 15%;
+	min-width: 15rem;
+}
+th:nth-child(3) {
+	width: 50%;
+	min-width: 50rem;
+}
+th:last-child {
+	width: 35%;
+	min-width: 35rem;
+}
+td {
+	border-top: 1px solid var(--gold-33);
+	padding: 0.5em;
+}
+/* Thick border under tbody when both open and closed */
+tbody.closed tr:first-child th,
+tbody tr:last-child td {
+	border-bottom: 2px solid var(--gold-33);
+}
+/* Unset backgrounds and borders on last column */
+tbody.closed tr:first-child th:last-child,
+tbody tr:last-child td:last-child,
+th:last-child,
+td:last-child {
+	border: none;
+	border-left: 1px solid var(--gold-33);
+	background: var(--grey);
+}
+tbody tr:first-child:hover {
+	background: var(--lite);
+}
+tbody:nth-child(even) tr {
+	background: var(--lite-33);
+}
+tbody:nth-child(even) tr:nth-child(even) {
+	background: var(--lite-20);
+}
+tbody tr:nth-child(even) {
+	background: var(--lite-12);
+}
+tbody .expand-arrow {
+	display: inline-block;
+	text-shadow: 0px 0px 1px var(--gold);
+	transform: translateY(-1px);
+}
+tbody.closed .expand-arrow {
+	transform: rotate(-90deg);
+}
+tbody.closed tr:first-child {
+	display: table-row;
+}
+tbody.closed tr {
+	display: none;
+}
