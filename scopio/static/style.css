@@ -26,7 +26,7 @@ header {
 	align-items: center;
 	padding: 0 2em;
 	background-color: var(--navy);
-	border-bottom: 2px solid var(--lite);
+	border-bottom: 2px solid var(--dark);
 }
 header h1 {
 	color: var(--gold);
@@ -138,40 +138,49 @@ dialog li.error::before {
 }
 
 table {
-	border-collapse: collapse;
+	border-collapse: separate;
+	border-spacing: 0;
 	width: 100%;
+}
+thead {
+	background: var(--gold-33);
+}
+th {
+	padding: 0.5em;
+	vertical-align: top;
 }
 tbody th {
 	text-align: left;
 	cursor: pointer;
-	padding: 0.5em;
+}
+th:first-child {
+	width: 17%;
+	min-width: 17rem;
 }
 th:nth-child(2) {
-	width: 15%;
-	min-width: 15rem;
-}
-th:nth-child(3) {
 	width: 50%;
 	min-width: 50rem;
 }
 th:last-child {
-	width: 35%;
-	min-width: 35rem;
+	width: 33%;
+	min-width: 33rem;
 }
 td {
 	border-top: 1px solid var(--gold-33);
 	padding: 0.5em;
 }
 /* Thick border under tbody when both open and closed */
-tbody.closed tr:first-child th,
+thead th,
+tbody.closed th,
+tbody th:first-child,
 tbody tr:last-child td {
 	border-bottom: 2px solid var(--gold-33);
 }
 /* Unset backgrounds and borders on last column */
-tbody.closed tr:first-child th:last-child,
+tbody.closed th:last-child,
 tbody tr:last-child td:last-child,
-th:last-child,
-td:last-child {
+tbody th:last-child,
+tbody td:last-child {
 	border: none;
 	border-left: 1px solid var(--gold-33);
 	background: var(--grey);
@@ -179,10 +188,10 @@ td:last-child {
 tbody tr:first-child:hover {
 	background: var(--lite);
 }
-tbody:nth-child(even) tr {
+tbody:nth-child(odd) tr {
 	background: var(--lite-33);
 }
-tbody:nth-child(even) tr:nth-child(even) {
+tbody:nth-child(odd) tr:nth-child(even) {
 	background: var(--lite-20);
 }
 tbody tr:nth-child(even) {
@@ -190,11 +199,12 @@ tbody tr:nth-child(even) {
 }
 tbody .expand-arrow {
 	display: inline-block;
+	margin-right: 0.5em;
 	text-shadow: 0px 0px 1px var(--gold);
 	transform: translateY(-1px);
 }
 tbody.closed .expand-arrow {
-	transform: rotate(-90deg);
+	transform: rotate(-90deg) translateX(1px);
 }
 tbody.closed tr:first-child {
 	display: table-row;

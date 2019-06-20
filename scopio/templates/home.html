@@ -19,18 +19,24 @@
 		<main>
 			{% if groups.count %}
 				<table>
+					<thead>
+						<th>Date</th>
+						<th>Activity</th>
+						<th>Tax Events</th>
+					</thead>
+					<div class='scrollable'>
 					{% for group in groups %}
 						<tbody class='{% if not group.needs_events %}closed{% endif %}'>
 							<tr>
-								<th><span class='expand-arrow'>&#x25bd</span></th>
-								<th>{{ group.timestamp }}</th>
+								<th rowspan=0>
+									<span class='expand-arrow'>&#x25bd</span>
+									{{ group.timestamp }}
+								</th>
 								<th>{{ group.summary }}</th>
 								<th></th>
 							</tr>
 							{% for record in group.records.all %}
 								<tr>
-									<td></td>
-									<td></td>
 									<td>{{ record }}</td>
 									<td>
 										{% if record.event %}
@@ -45,6 +51,7 @@
 							{% endfor %}
 						</tbody>
 					{% endfor %}
+					</div>
 				</table>
 			{% else %}
 				<p>
