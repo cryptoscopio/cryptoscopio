@@ -1,5 +1,9 @@
 :root {
 	--grey: #F8F1EF;
+	--grey-12: #F8F1EF20;
+	--grey-33: #F8F1EF55;
+	--grey-50: #F8F1EF80;
+	--grey-80: #F8F1EFCC;
 	--dark:	#0A0D21;
 	--navy: #1A2038;
 	--navy-80: #1A2038CC;
@@ -17,6 +21,9 @@ body {
 	margin: 0;
 	padding: 0;
 	background-color: var(--grey);
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
 }
 body * {
 	color: var(--navy);
@@ -52,6 +59,11 @@ header menu li:hover {
 	background: var(--gold);
 	text-shadow: none;
 }
+main {
+	position: relative;
+	overflow: auto;
+	height: 100%;
+}
 
 dialog {
 	display: none;
@@ -61,6 +73,7 @@ dialog {
 	width: 100%;
 	position: fixed;
 	background-color: var(--navy-80);
+	z-index: 2;
 }
 dialog.open {
 	display: flex;
@@ -169,6 +182,9 @@ td {
 	border-top: 1px solid var(--gold-33);
 	padding: 0.5em;
 }
+td.selected {
+	background: var(--gold);
+}
 /* Thick border under tbody when both open and closed */
 thead th,
 tbody.closed th,
@@ -184,6 +200,7 @@ tbody td:last-child {
 	border: none;
 	border-left: 1px solid var(--gold-33);
 	background: var(--grey);
+	position: relative;
 }
 tbody tr:first-child:hover {
 	background: var(--lite);
@@ -210,5 +227,63 @@ tbody.closed tr:first-child {
 	display: table-row;
 }
 tbody.closed tr {
+	display: none;
+}
+
+aside {
+	position: absolute;
+	width: 100%;
+	top: 0;
+	left: -1px;
+	z-index: 1;
+	background: var(--gold);
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+}
+aside .question {
+	padding: 1em;
+}
+aside h2 {
+	font-size: 1.8rem;
+	margin: 1em 0;
+	text-shadow: 0px 1px 0px var(--lite);
+}
+aside h3 {
+	font-size: 1rem;
+	font-family: sans-serif;
+	text-shadow: 0px 1px 0px var(--lite-33);
+}
+aside a {
+	margin: 0.5em 2em 0;
+	padding: 0.5em 1em;
+	border: solid 1px var(--grey-80);
+	border-radius: 5px;
+	background-image: linear-gradient(var(--grey-80), var(--grey-33));
+	display: block;
+	cursor: pointer;
+	text-decoration: none;
+}
+aside a:hover {
+	background-image: linear-gradient(var(--grey-33), var(--grey-12));
+}
+aside input, aside select {
+	font-size: 1rem;
+	margin-bottom: 0.5em;
+}
+aside a:active {
+	border: dotted 1px var(--grey-80);
+}
+aside .question>p {
+	margin: 1.5em 1em 0.5em;
+}
+aside #error-message {
+	color: red;
+	margin: 0.5em 0;
+}
+aside .hidden {
 	display: none;
 }

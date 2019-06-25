@@ -24,7 +24,6 @@
 						<th>Activity</th>
 						<th>Tax Events</th>
 					</thead>
-					<div class='scrollable'>
 					{% for group in groups %}
 						<tbody class='{% if not group.needs_events %}closed{% endif %}'>
 							<tr>
@@ -36,7 +35,7 @@
 								<th></th>
 							</tr>
 							{% for record in group.records.all %}
-								<tr>
+								<tr data-record='{{ record.pk }}'>
 									<td>{{ record }}</td>
 									<td>
 										{% if record.event %}
@@ -44,14 +43,18 @@
 												{{ record.event }}
 											</div>
 										{% elif record.needs_event %}
-											[input required]
+											<a href='#'
+												class='input-required'
+												data-template='question-{{ record.get_direction_display }}'
+											>
+												[input required]
+											</a>
 										{% endif %}
 									</td>
 								</tr>
 							{% endfor %}
 						</tbody>
 					{% endfor %}
-					</div>
 				</table>
 			{% else %}
 				<p>
@@ -141,5 +144,130 @@
 				<input type='button' value='Cancel'>
 			</form>
 		</dialog>
+		<template id='question-incoming'>
+			<aside>
+				<div class='question'>
+					<h2>How did you come to receive this transfer?</h2>
+					<a href='#' data-action='zero-cost'>
+						<h3>Zero-cost acquisition</h3>
+						<p>
+							Cost basis of zero for capital gains purposes. Can apply to cryptocurrency
+							received from mining or staking, faucets, blockchain forks, etc.
+						</p>
+					</a>
+					<a href='#' data-action='market-price'>
+						<h3>Market-price acquisition</h3>
+						<p>
+							Fiat market price at time of acquisition. Can apply when you received
+							cryptocurrency in lieu of equivalent amount in fait, e.g. as wages. 
+							May need to be separately declared as taxable income.
+						</p>
+					</a>
+					<a href='#' data-action='transfer'>
+						<h3>Transfer from own account</h3>
+						<p>
+							Using the "parse address" or "import records" options is preferred for this.
+							You may need to manually specify the origin of the funds otherwise.
+						</p>
+					</a>
+					<a href='#' data-action='price'>
+					<h3>Acquisition at a specific price</h3>
+						<select id='currency'>
+							<option value=''>Currency</option>
+							{% for currency in currencies %}
+								<option value='{{ currency.slug }}'>{{ currency.ticker }}</option>
+							{% endfor %}
+						</select>
+						<input id='price' type='number' step='0.01' placeholder='Price'>
+						<p id='error-message' class='hidden'>
+							Please enter a valid currency and price
+						</p>
+					</a>
+					<a href='#' data-action='amount'>
+						<h3>Acquisition for a specific amount</h3>
+						<select id='currency'>
+							<option value=''>Currency</option>
+							{% for currency in currencies %}
+								<option value='{{ currency.slug }}'>{{ currency.ticker }}</option>
+							{% endfor %}
+						</select>
+						<input id='amount' type='number' step='0.01' placeholder='Amount'>
+						<p id='error-message' class='hidden'>
+							Please enter a valid currency and amount
+						</p>
+					</a>
+					<a href='#' data-action='cancel'>
+						<h3>Cancel</h3>
+					</a>
+					<p>
+						None of the suggested examples should be interpreted as tax advice. It is up
+						to you to accurately determine how the cost base for this acquisition should
+						be calculated. When in doubt, zero-cost is the safest option.
+					</p>
+				</div>
+			</aside>
+		</template>
+		<template id='question-outgoing'>
+			<aside>
+				<div class='question'>
+					<h2>What was the purpose of this transfer?</h2>
+					<a href='#' data-action='market-price'>
+						<h3>Payment for goods or services</h3>
+						<p>
+							Applicable in just about any scenario where cryptocurrency is spent.
+							Market price at the time of transfer used to calculate realised gain/loss.
+						</p>
+					</a>
+					<a href='#' data-action='zero-cost'>
+						<h3>Unrecoverable disposal</h3>
+						<p>
+							Intentional transfer to a burn address to realise a loss, or accidental
+							permanent loss of wallet or private keys.
+						</p>
+					</a>
+					<a href='#' data-action='transfer'>
+						<h3>Transfer to own account</h3>
+						<p>
+							Using the "parse address" or "import records" options is preferable,
+							if possible.
+						</p>
+					</a>
+					<a href='#' data-action='price'>
+					<h3>Sale at a specific price</h3>
+						<select id='currency'>
+							<option value=''>Currency</option>
+							{% for currency in currencies %}
+								<option value='{{ currency.slug }}'>{{ currency.ticker }}</option>
+							{% endfor %}
+						</select>
+						<input id='price' type='number' step='0.01' placeholder='Price'>
+						<p id='error-message' class='hidden'>
+							Please enter a valid currency and price
+						</p>
+					</a>
+					<a href='#' data-action='amount'>
+						<h3>Sale for a specific amount</h3>
+						<select id='currency'>
+							<option value=''>Currency</option>
+							{% for currency in currencies %}
+								<option value='{{ currency.slug }}'>{{ currency.ticker }}</option>
+							{% endfor %}
+						</select>
+						<input id='amount' type='number' step='0.01' placeholder='Amount'>
+						<p id='error-message' class='hidden'>
+							Please enter a valid currency and amount
+						</p>
+					</a>
+					<a href='#' data-action='cancel'>
+						<h3>Cancel</h3>
+					</a>
+					<p>
+						None of the suggested examples should be interpreted as tax advice. It is up
+						to you to accurately determine how the cost base for this disposal should
+						be calculated. Unrecoverable disposal is very rarely applicable.
+					</p>
+				</div>
+			</aside>
+		</template>
 	</body>
 </html>

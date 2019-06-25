@@ -38,7 +38,6 @@ class Record(models.Model):
 		ordering = ['timestamp']
 
 	def __str__(self):
-		amount = self.currency.format_amount(self.amount if not self.outgoing else -self.amount)
 		if self.is_fee:
 			action = 'Paid fee of'
 		elif self.platform and not self.transaction:
@@ -48,7 +47,15 @@ class Record(models.Model):
 				action = 'Sold' if self.outgoing else 'Purchased'
 		else:
 			action = 'Sent' if self.outgoing else 'Received'
-		return f'{action} {amount}'
+		return f'{action} {self.get_amount_display()}'
+
+	def get_amount_display(self):
+		return self.currency.format_amount(
+			self.amount if not self.outgoing else -self.amount
+		)
+
+	def get_direction_display(self):
+		return 'outgoing' if self.outgoing else 'incoming'
 
 
 class Event(models.Model):

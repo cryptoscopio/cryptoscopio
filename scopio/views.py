@@ -4,6 +4,8 @@ from django.shortcuts import redirect
 from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 
+from currencio.models import Currency
+
 from .explorers import explorers
 from .models import RecordGroup
 from .parsers import parsers
@@ -139,7 +141,10 @@ class HomeView(TemplateView):
 	def get_context_data(self, *args, **kwargs):
 		context = super().get_context_data(*args, **kwargs)
 		context.update({
-			'groups': RecordGroup.objects.prefetch_related('records', 'records__event'),
+			'currencies': Currency.objects.filter(fiat=True),
+			'groups': RecordGroup.objects.prefetch_related(
+				'records', 'records__event', 'records__currency'
+			),
 			'results': self.request.session.pop('results', {}),
 			'additional': self.request.session.pop('additional', {}),
 			'parse_address_form': ParseAddressForm(),
